@@ -1,8 +1,9 @@
+-- Copyright (C) Hanada
 -- Copyright (C) by Kwanhur Huang
 
 
 local modulename = "gdBase"
-local _M = { _VERSION = '2.2.5.1', _NAME = modulename }
+local _M = { _VERSION = '2.3.3.2', _NAME = modulename }
 
 local ffi = require('ffi')
 local libgd = require('resty.gd.libgd')
@@ -75,5 +76,34 @@ _M.GD_OK = 1
 _M.GD_ERR = -1
 
 _M.GD_ZERO = 0
+
+--New in GD 2.1.0+: palette quantization methods
+_M.GD_QUANT_DEFAULT = 0
+_M.GD_QUANT_JQUANT = 1
+_M.GD_QUANT_NEUQUANT = 2
+_M.GD_QUANT_LIQ = 3
+
+--New in GD 2.1.0+: alpha blending effects
+_M.gdEffectReplace = 0
+_M.gdEffectAlphaBlend = 1
+_M.gdEffectNormal = 2
+_M.gdEffectOverlay = 3
+_M.gdEffectMultiply = 4
+
+--New in GD 2.3.0+: pixelate modes
+_M.GD_PIXELATE_UPPERLEFT = 0
+_M.GD_PIXELATE_AVERAGE = 1
+
+--New in GD 2.3.0+: WebP lossless threshold
+_M.gdWebpLossless = 101
+
+--New in GD 2.3.0+: HEIF codec
+_M.GD_HEIF_CODEC_UNKNOWN = 0
+_M.GD_HEIF_CODEC_HEVC = 1
+_M.GD_HEIF_CODEC_AV1 = 4
+
+--New in GD 2.1.0+: boolean
+_M.GD_TRUE = 1
+_M.GD_FALSE = 0
 
 return _M

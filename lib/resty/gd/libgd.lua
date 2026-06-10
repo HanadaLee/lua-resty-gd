@@ -1,9 +1,11 @@
+-- Copyright (C) Hanada
 -- Copyright (C) by Kwanhur Huang
 
 
 local ffi = require('ffi')
 local pcall = pcall
 local error = error
+
 
 ffi.cdef([[
 	struct _IO_FILE;
@@ -537,9 +539,11 @@ ffi.cdef([[
 	void *gdImageGifAnimEndPtr(int *size);
 ]])
 
+
 local lib_patterns = {
     "%s", "%s.3", "%s.2"
 }
+
 
 local function get_libname()
     local suffix
@@ -553,6 +557,7 @@ local function get_libname()
     return "libgd" .. suffix
 end
 
+
 local function load_library()
     for _, pattern in ipairs(lib_patterns) do
         local name = string.format(pattern, get_libname())
@@ -564,6 +569,8 @@ local function load_library()
     return error("Failed to load gd library")
 end
 
+
 local lib = load_library()
+
 
 return lib

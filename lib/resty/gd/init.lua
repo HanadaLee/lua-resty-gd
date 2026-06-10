@@ -1,3 +1,4 @@
+-- Copyright (C) Hanada
 -- Copyright (C) by Kwanhur Huang
 
 
@@ -10,11 +11,14 @@ local util = require('resty.gd.util')
 local image = require('resty.gd.image')
 local bit = require('bit')
 
+local ffi = require('ffi')
+local ffi_string = ffi.string
 local tonumber = tonumber
 local type = type
 local len = string.len
 local open = io.open
 local bit_band = bit.band
+
 
 _M.destroy = function(image)
     if image and image.im then
@@ -24,6 +28,7 @@ _M.destroy = function(image)
     end
     return false
 end
+
 
 _M.create = function(sx, sy)
     sx, sy = tonumber(sx), tonumber(sy)
@@ -36,6 +41,7 @@ _M.create = function(sx, sy)
     end
     return image:new(im)
 end
+
 
 _M.createPalette = _M.create
 
@@ -50,6 +56,7 @@ _M.createTrueColor = function(sx, sy)
     end
     return image:new(im)
 end
+
 
 _M.createFromJpeg = function(fname)
     local file, err = open(fname, "rb")
@@ -66,6 +73,7 @@ _M.createFromJpeg = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromJpegStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -77,6 +85,7 @@ _M.createFromJpegStr = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromGif = function(fname)
     local file, err = open(fname, "rb")
@@ -93,6 +102,7 @@ _M.createFromGif = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromGifStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -104,6 +114,7 @@ _M.createFromGifStr = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromPng = function(fname)
     local file, err = open(fname, "rb")
@@ -120,6 +131,7 @@ _M.createFromPng = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromPngStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -131,6 +143,7 @@ _M.createFromPngStr = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromGd = function(fname)
     local file, err = open(fname, "rb")
@@ -147,6 +160,7 @@ _M.createFromGd = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromGdStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -158,6 +172,7 @@ _M.createFromGdStr = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromGd2 = function(fname)
     local file, err = open(fname, "rb")
@@ -174,6 +189,7 @@ _M.createFromGd2 = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromGd2Str = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -185,6 +201,7 @@ _M.createFromGd2Str = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromGd2Part = function(fname, sx, sy, w, h)
     sx, sy, w, h = tonumber(sx), tonumber(sy), tonumber(w), tonumber(h)
@@ -209,6 +226,7 @@ _M.createFromGd2Part = function(fname, sx, sy, w, h)
     return image:new(im)
 end
 
+
 _M.createFromGd2PartStr = function(blob, sx, sy, w, h)
     sx, sy, w, h = tonumber(sx), tonumber(sy), tonumber(w), tonumber(h)
     if not sx or not sy or sx < 0 or sy < 0 then
@@ -222,12 +240,13 @@ _M.createFromGd2PartStr = function(blob, sx, sy, w, h)
         return nil, "blob could not accept"
     end
     local data = util.get_char_ptr(blob)
-    local im = libgd.gdImageCreateFromGd2PartPtr(len(blob), data)
+    local im = libgd.gdImageCreateFromGd2PartPtr(len(blob), data, sx, sy, w, h)
     if im == nil then
         return nil, "create failed"
     end
     return image:new(im)
 end
+
 
 _M.createFromXbm = function(fname)
     local file, err = open(fname, "rb")
@@ -244,6 +263,7 @@ _M.createFromXbm = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromXpm = function(fname)
     if not fname then
         return nil, "fname must not be empty"
@@ -254,6 +274,7 @@ _M.createFromXpm = function(fname)
     end
     return image:new(im)
 end
+
 
 _M.createFromWebp = function(fname)
     local file, err = open(fname, "rb")
@@ -270,6 +291,77 @@ _M.createFromWebp = function(fname)
     return image:new(im)
 end
 
+
+_M.createFromFile = function(fname)
+    if not fname then
+        return nil, "fname must not be empty"
+    end
+    local im = libgd.gdImageCreateFromFile(util.get_char_ptr(fname))
+    if im == nil then
+        return nil, "create failed"
+    end
+    return image:new(im)
+end
+
+
+_M.createFromBmp = function(fname)
+    local file, err = open(fname, "rb")
+    if not file then
+        return nil, err
+    end
+    local im = libgd.gdImageCreateFromBmp(file)
+    if file then
+        file:close()
+    end
+    if im == nil then
+        return nil, "create failed"
+    end
+    return image:new(im)
+end
+
+
+_M.createFromBmpStr = function(blob)
+    if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
+        return nil, "blob could not accept"
+    end
+    local data = util.get_char_ptr(blob)
+    local im = libgd.gdImageCreateFromBmpPtr(len(blob), data)
+    if im == nil then
+        return nil, "create failed"
+    end
+    return image:new(im)
+end
+
+
+_M.createFromTga = function(fname)
+    local file, err = open(fname, "rb")
+    if not file then
+        return nil, err
+    end
+    local im = libgd.gdImageCreateFromTga(file)
+    if file then
+        file:close()
+    end
+    if im == nil then
+        return nil, "create failed"
+    end
+    return image:new(im)
+end
+
+
+_M.createFromTgaStr = function(blob)
+    if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
+        return nil, "blob could not accept"
+    end
+    local data = util.get_char_ptr(blob)
+    local im = libgd.gdImageCreateFromTgaPtr(len(blob), data)
+    if im == nil then
+        return nil, "create failed"
+    end
+    return image:new(im)
+end
+
+
 _M.createFromWebpStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -281,6 +373,7 @@ _M.createFromWebpStr = function(blob)
     end
     return image:new(im)
 end
+
 
 _M.createFromTiff = function(fname)
     local file, err = open(fname, "rb")
@@ -297,6 +390,7 @@ _M.createFromTiff = function(fname)
     return image:new(im)
 end
 
+
 _M.createFromTiffStr = function(blob)
     if not blob or type(blob) ~= 'string' or len(blob) <= 0 then
         return nil, "blob could not accept"
@@ -309,59 +403,66 @@ _M.createFromTiffStr = function(blob)
     return image:new(im)
 end
 
+
 _M.png = function(im, fname)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:png(fname)
 end
+
 
 _M.pngEx = function(im, fname, compression_level)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:pngEx(fname, compression_level)
 end
+
 
 _M.gif = function(im, fname)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:gif(fname)
 end
+
 
 _M.gd = function(im, fname)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:gd(fname)
 end
+
 
 _M.gd2 = function(im, fname, chunk_size, format)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:gd2(fname, chunk_size, format)
 end
+
 
 _M.wbmp = function(im, foreground, fname)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local gd = image:new(im)
+    local gd = image:wrap(im)
     return gd:wbmp(foreground, fname)
 end
+
 
 _M.copy = function(dst, src, dx, dy, sx, sy, w, h)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
@@ -384,6 +485,7 @@ _M.copy = function(dst, src, dx, dy, sx, sy, w, h)
     return true
 end
 
+
 _M.copyResized = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
         return false, "dst src must be specified as cdata<gdImagePtr>"
@@ -397,14 +499,19 @@ _M.copyResized = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
+    dw, dh = tonumber(dw), tonumber(dh)
+    if not dw or not dh or dw <= 0 or dh <= 0 then
+        return false, "dw and dh must be a positive number"
+    end
     sw, sh = tonumber(sw), tonumber(sh)
-    if not sw or not sh or sw < 0 or sh < 0 then
-        return false, "sw and sh must be a number not less than 0"
+    if not sw or not sh or sw <= 0 or sh <= 0 then
+        return false, "sw and sh must be a positive number"
     end
 
     libgd.gdImageCopyResized(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     return true
 end
+
 
 _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
@@ -419,14 +526,19 @@ _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
+    dw, dh = tonumber(dw), tonumber(dh)
+    if not dw or not dh or dw <= 0 or dh <= 0 then
+        return false, "dw and dh must be a positive number"
+    end
     sw, sh = tonumber(sw), tonumber(sh)
-    if not sw or not sh or sw < 0 or sh < 0 then
-        return false, "sw and sh must be a number not less than 0"
+    if not sw or not sh or sw <= 0 or sh <= 0 then
+        return false, "sw and sh must be a positive number"
     end
 
     libgd.gdImageCopyResampled(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     return true
 end
+
 
 _M.copyRotated = function(dst, src, dx, dy, sx, sy, sw, sh, angle)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
@@ -454,6 +566,7 @@ _M.copyRotated = function(dst, src, dx, dy, sx, sy, sw, sh, angle)
     return true
 end
 
+
 _M.copyMerge = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
         return false, "dst src must be specified as cdata<gdImagePtr>"
@@ -479,6 +592,7 @@ _M.copyMerge = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     libgd.gdImageCopyMerge(dst, src, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
+
 
 _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
@@ -506,111 +620,86 @@ _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
 
+
 _M.polygon = function(im, points, color)
     if not im or type(im) ~= 'cdata' then
         return false, "im must be specified as cdata<gdImagePtr>"
     end
-    color = tonumber(color)
-    if not color then
-        return false, "color must be a number not less than 0"
-    end
 
-    if not points or type(points) ~= 'table' or #points <= 0 then
-        return false, "points must be specified table not empty"
-    end
-
-    local plist, err = util.get_point_list(points)
-    if not plist then
-        return false, err
-    end
-
-    libgd.gdImagePolygon(im, plist, #points, color)
-    plist = nil
-    return true
+    local gd = image:wrap(im)
+    return gd:polygon(points, color)
 end
+
 
 _M.filledPolygon = function(im, points, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return false, "color must be a number not less than 0"
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    if not points or type(points) ~= 'table' or #points <= 0 then
-        return false, "points must be specified table not empty"
-    end
-
-    local plist, err = util.get_point_list(points)
-    if not plist then
-        return false, err
-    end
-
-    libgd.gdImageFilledPolygon(im, plist, #points, color)
-    plist = nil
-    return true
+    local gd = image:wrap(im)
+    return gd:filledPolygon(points, color)
 end
+
 
 _M.openPolygon = function(im, points, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return false, "color must be a number not less than 0"
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    if not points or type(points) ~= 'table' or #points <= 0 then
-        return false, "points must be specified table not empty"
-    end
-
-    local plist, err = util.get_point_list(points)
-    if not plist then
-        return false, err
-    end
-
-    libgd.gdImageOpenPolygon(im, plist, #points, color)
-    plist = nil
-    return true
+    local gd = image:wrap(im)
+    return gd:openPolygon(points, color)
 end
+
 
 _M.setStyle = function(im, styles)
-    if not styles or type(styles) ~= 'table' or #styles == 0 then
-        return false, "styles must be a table"
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
 
-    local slist = util.get_style_list(styles)
-    libgd.gdImageSetStyle(im, slist, #styles)
-    return true
+    local gd = image:wrap(im)
+    return gd:setStyle(styles)
 end
+
 
 _M.alphaBlending = function(im, blending)
-    blending = tonumber(blending)
-    if not blending then
-        return false, "blending must be a number"
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
-    libgd.gdImageAlphaBlending(im, blending)
-    return true
+
+    local gd = image:wrap(im)
+    return gd:alphaBlending(blending)
 end
+
 
 _M.saveAlpha = function(im, save_or_not)
-    local save = 0
-    if save_or_not then
-        save = 1
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
-    libgd.gdImageSaveAlpha(im, save)
+
+    local gd = image:wrap(im)
+    return gd:saveAlpha(save_or_not)
 end
+
 
 _M.interlace = function(im)
-    local ret = libgd.gdImageGetInterlaced(im)
-    if ret ~= base.GD_OK then
-        return ret
-    else
-        return nil
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
     end
+
+    local gd = image:wrap(im)
+    return gd:interlace()
 end
 
-_M.getClip = function()
-    local x1, y1 = util.get_int_ptr_0(), util.get_int_ptr_0()
-    local x2, y2 = util.get_int_ptr_0(), util.get_int_ptr_0()
-    libgd.gdImageGetClip(x1, y1, x2, y2)
-    return tonumber(x1), tonumber(y1), tonumber(x2), tonumber(y2)
+
+_M.getClip = function(im)
+    if not im or type(im) ~= 'cdata' then
+        return false, "im must be specified as cdata<gdImagePtr>"
+    end
+
+    local gd = image:wrap(im)
+    return gd:getClip()
 end
+
 
 _M.paletteCopy = function(dst, src)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
@@ -620,21 +709,25 @@ _M.paletteCopy = function(dst, src)
     return true
 end
 
+
 _M.fontCacheSetup = function()
     return libgd.gdFontCacheSetup() == base.GD_ZERO
 end
+
 
 _M.fontCacheShutdown = function()
     libgd.gdFontCacheShutdown()
 end
 
+
 _M.useFontConfig = function(flag)
-    local use = false
+    local use = 0
     if flag then
-        use = true
+        use = 1
     end
     return libgd.gdFTUseFontConfig(use) ~= base.GD_ZERO
 end
+
 
 _M.stringFT = function(foreground, font, size, ang, x, y, str)
     foreground = tonumber(foreground)
@@ -662,10 +755,11 @@ _M.stringFT = function(foreground, font, size, ang, x, y, str)
 
     local brect = util.get_int_ptr_list(8)
     if libgd.gdImageStringFT(nil, brect, foreground, font, size, ang, x, y, str) == nil then
-        return brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], brect[8]
+        return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
     return nil
 end
+
 
 _M.stringFTEx = function(foreground, font, size, ang, x, y, str, extr)
     foreground = tonumber(foreground)
@@ -698,21 +792,23 @@ _M.stringFTEx = function(foreground, font, size, ang, x, y, str, extr)
     local brect = util.get_int_ptr_list(8)
     if libgd.gdImageStringFTEx(nil, brect, foreground, font, size, ang, x, y, str, ex) == nil then
         if bit_band(ex.flags, base.gdFTEX_XSHOW) then
-            return brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], brect[8], ex.xshow
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow
         end
 
         if bit_band(ex.flags, base.gdFTEX_RETURNFONTPATHNAME) then
-            return brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], brect[8], ex.xshow, ex.fontpath
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow, ex.fontpath
         end
-        return brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], brect[8]
+        return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
     return nil
 end
 
+
 _M.gifAnimEndStr = function()
     local size = util.get_int_ptr_0()
-    return libgd.gdImageGifAnimEndPtr(size)
+    return ffi_string(libgd.gdImageGifAnimEndPtr(size), size[0])
 end
+
 
 _M.VERSION = base._VERSION
 

@@ -4,15 +4,16 @@ Lua FFI binding to [libgd](https://github.com/libgd/libgd)
 Table of Contents
 =================
 
-* [Name](#name)
-* [Status](#status)
-* [Synopsis](#synopsis)
-* [API](#api)
-    * [gd](#gd)
-* [Version](#version)
-* [Installation](#installation)
-* [Authors](#authors)
-* [Copyright and License](#copyright-and-license)
+- [lua-resty-gd](#lua-resty-gd)
+- [Table of Contents](#table-of-contents)
+- [Status](#status)
+- [Synopsis](#synopsis)
+- [API](#api)
+  - [gd](#gd)
+- [Version](#version)
+- [Installation](#installation)
+- [Authors](#authors)
+- [Copyright and License](#copyright-and-license)
 
 Status
 ======
@@ -55,21 +56,27 @@ Version numbers are in the format "X.Y.Z.W", where X.Y.Z indicates the libgd ver
 
 So, the 2.2.5.1 version is the first binding version for libgd 2.2.5 and 2.2.5.2 has some improvements, bug fixes, etc. 
 
-But they use the same libgd version
+But they use the same libgd version.
+
+The current version 2.3.3.2 is the first binding version for libgd 2.3.3. It is not compatible with previous versions.
 
 [Back to TOC](#table-of-contents)
 
 Installation
 ============
 
-You can install it with [opm](https://github.com/openresty/opm#readme).
-Just like that: opm install kwanhur/lua-resty-gd
+You can install it with [LuaRocks](https://luarocks.org):
+
+```bash
+luarocks install lua-resty-gd
+```
 
 [Back to TOC](#table-of-contents)
 
 Authors
 =======
 
+Hanada <im@hanada.info>
 kwanhur <huang_hua2012@163.com>, VIPS Inc.
 
 [Back to TOC](#table-of-contents)
@@ -79,6 +86,7 @@ Copyright and License
 
 This module is licensed under the BSD 2-Clause License .
 
+Copyright (C) Hanada
 Copyright (C) 2018, by kwanhur <huang_hua2012@163.com>, VIPS Inc.
 
 All rights reserved.

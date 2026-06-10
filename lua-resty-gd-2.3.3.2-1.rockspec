@@ -3,7 +3,7 @@ version = "2.3.3.2-1"
 
 source = {
     url = "git://github.com/HanadaLee/lua-resty-gd.git",
-    branch = "master",
+    branch = "2.3.3.2",
 }
 
 description = {

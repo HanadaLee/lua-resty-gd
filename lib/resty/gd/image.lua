@@ -126,7 +126,7 @@ _M.pngEx = function(self, fname, compression_level)
         return false, err
     end
 
-    libgd.gdImagePngEx(self.im, f)
+    libgd.gdImagePngEx(self.im, f, level)
     if f then
         f:close()
     end
@@ -186,7 +186,7 @@ _M.gd2 = function(self, fname, chunk_size, format)
     end
 
     format = tonumber(format)
-    if not format or format ~= base.GD2_FMT_RAW or format ~= base.GD2_FMT_COMPRESSED then
+    if not format or (format ~= base.GD2_FMT_RAW and format ~= base.GD2_FMT_COMPRESSED) then
         return false, "format must be gd.GD2_FMT_RAW or gd.GD2_FMT_COMPRESSED"
     end
     local f, err = open(fname, 'wb')
@@ -212,7 +212,7 @@ _M.gd2Str = function(self, chunk_size, format)
         return nil, "format must be gd.GD2_FMT_RAW or gd.GD2_FMT_COMPRESSED"
     end
 
-    local blob = libgd.gdImageGd2Ptr(self.im, util.get_int_ptr_0())
+    local blob = libgd.gdImageGd2Ptr(self.im, chunk_size, format, util.get_int_ptr_0())
     return tostring(blob)
 end
 
@@ -732,18 +732,14 @@ _M.filledArc = function(self, cx, cy, w, h, s, e, color, style)
     return true
 end
 
-_M.filledEllipse = function(self, cx, cy, w, h, s, e, color)
+_M.filledEllipse = function(self, cx, cy, w, h, color)
     cx, cy = tonumber(cx), tonumber(cy)
     w, h = tonumber(w), tonumber(h)
-    s, e = tonumber(s), tonumber(e)
     color = tonumber(color)
-    if not cx or not cy or not w or not h or not s or not e or not color then
-        return false, "cx cy w h s e color must be a number"
+    if not cx or not cy or not w or not h or not color then
+        return false, "cx cy w h color must be a number"
     end
-    if s <= e then
-        return false, "s must be greater than e"
-    end
-    libgd.gdImageFilledEllipse(self.im, cx, cy, w, h, s, e, color)
+    libgd.gdImageFilledEllipse(self.im, cx, cy, w, h, color)
     return true
 end
 
@@ -784,12 +780,14 @@ _M.setAntiAliased = function(self, color)
     return true
 end
 
-_M.setAntiAliasedDontBlend = function(self, color)
+_M.setAntiAliasedDontBlend = function(self, color, dont_blend)
     color = tonumber(color)
     if not color and color < 0 then
         return false, "color must be a number not less than 0"
     end
-    libgd.gdImageSetAntiAliasedDontBlend(self.im, color)
+    local db = 0
+    if dont_blend then db = 1 end
+    libgd.gdImageSetAntiAliasedDontBlend(self.im, color, db)
     return true
 end
 
@@ -818,7 +816,7 @@ _M.setTile = function(self, tile)
 end
 
 _M.setStyle = function(self, styles)
-    if not styles or type(styles) ~= 'table' or #styles then
+    if not styles or type(styles) ~= 'table' or #styles == 0 then
         return false, "styles must be a table"
     end
 
@@ -1110,7 +1108,7 @@ disposal, previm)
         return false, "disposal must be a number"
     end
 
-    libgd.gdImageGifAnimAdd(self.im, fname, localCM, leftOfs, topOfs, delay,
+    libgd.gdImageGifAnimAdd(self.im, f, localCM, leftOfs, topOfs, delay,
         disposal, previm)
     if f then
         f:close()

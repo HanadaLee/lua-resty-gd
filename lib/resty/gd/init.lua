@@ -397,10 +397,6 @@ _M.copyResized = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
-    dw, dh = tonumber(dw), tonumber(dh)
-    if not dw or not dh or dw < 0 or dh < 0 then
-        return false, "dw and dh must be a number not less than 0"
-    end
     sw, sh = tonumber(sw), tonumber(sh)
     if not sw or not sh or sw < 0 or sh < 0 then
         return false, "sw and sh must be a number not less than 0"
@@ -423,10 +419,6 @@ _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
-    dw, dh = tonumber(dw), tonumber(dh)
-    if not dw or not dh or dw < 0 or dh < 0 then
-        return false, "dw and dh must be a number not less than 0"
-    end
     sw, sh = tonumber(sw), tonumber(sh)
     if not sw or not sh or sw < 0 or sh < 0 then
         return false, "sw and sh must be a number not less than 0"
@@ -436,7 +428,7 @@ _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
     return true
 end
 
-_M.copyRotated = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, angle)
+_M.copyRotated = function(dst, src, dx, dy, sx, sy, sw, sh, angle)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
         return false, "dst src must be specified as cdata<gdImagePtr>"
     end
@@ -448,10 +440,6 @@ _M.copyRotated = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, angle)
     sx, sy = tonumber(sx), tonumber(sy)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
-    end
-    dw, dh = tonumber(dw), tonumber(dh)
-    if not dw or not dh or dw < 0 or dh < 0 then
-        return false, "dw and dh must be a number not less than 0"
     end
     sw, sh = tonumber(sw), tonumber(sh)
     if not sw or not sh or sw < 0 or sh < 0 then
@@ -462,11 +450,11 @@ _M.copyRotated = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, angle)
         return false, "angle must be a number"
     end
 
-    libgd.gdImageCopyRotated(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, angle)
+    libgd.gdImageCopyRotated(dst, src, dx, dy, sx, sy, sw, sh, angle)
     return true
 end
 
-_M.copyMerge = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
+_M.copyMerge = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
         return false, "dst src must be specified as cdata<gdImagePtr>"
     end
@@ -479,10 +467,6 @@ _M.copyMerge = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
-    dw, dh = tonumber(dw), tonumber(dh)
-    if not dw or not dh or dw < 0 or dh < 0 then
-        return false, "dw and dh must be a number not less than 0"
-    end
     sw, sh = tonumber(sw), tonumber(sh)
     if not sw or not sh or sw < 0 or sh < 0 then
         return false, "sw and sh must be a number not less than 0"
@@ -492,11 +476,11 @@ _M.copyMerge = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
         return false, "pct must be a number"
     end
 
-    libgd.gdImageCopyMerge(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
+    libgd.gdImageCopyMerge(dst, src, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
 
-_M.copyMergeGray = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
+_M.copyMergeGray = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
     if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
         return false, "dst src must be specified as cdata<gdImagePtr>"
     end
@@ -509,10 +493,6 @@ _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
     if not sx or not sy or sx < 0 or sy < 0 then
         return false, "sx and sy must be a number not less than 0"
     end
-    dw, dh = tonumber(dw), tonumber(dh)
-    if not dw or not dh or dw < 0 or dh < 0 then
-        return false, "dw and dh must be a number not less than 0"
-    end
     sw, sh = tonumber(sw), tonumber(sh)
     if not sw or not sh or sw < 0 or sh < 0 then
         return false, "sw and sh must be a number not less than 0"
@@ -522,7 +502,7 @@ _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
         return false, "pct must be a number"
     end
 
-    libgd.gdImageCopyMergeGray(dst, src, dx, dy, sx, sy, dw, dh, sw, sh, pct)
+    libgd.gdImageCopyMergeGray(dst, src, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
 
@@ -590,7 +570,7 @@ _M.openPolygon = function(im, points, color)
 end
 
 _M.setStyle = function(im, styles)
-    if not styles or type(styles) ~= 'table' or #styles then
+    if not styles or type(styles) ~= 'table' or #styles == 0 then
         return false, "styles must be a table"
     end
 

@@ -20,6 +20,13 @@ _M.get_char_ptr = function(str)
 end
 
 
+_M.get_uchar_ptr = function(str)
+    local char_ptr = ffi_new("unsigned char[?]", #str + 1)
+    ffi_copy(char_ptr, str)
+    return char_ptr
+end
+
+
 _M.get_int_ptr_0 = function()
     return ffi_new("int[1]", 0)
 end
@@ -81,8 +88,6 @@ _M.get_font_type_extract_ptr = function(extr)
     if extr.charmap then ex.charmap = extr.charmap end
     if extr.hdpi then ex.hdpi = extr.hdpi end
     if extr.vdpi then ex.vdpi = extr.vdpi end
-    if extr.xshow then ex.xshow = extr.xshow end
-    if extr.fontpath then ex.fontpath = extr.fontpath end
     return ex
 end
 

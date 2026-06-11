@@ -12,18 +12,105 @@ local image = require('resty.gd.image')
 local bit = require('bit')
 
 local ffi = require('ffi')
+local ffi_gc = ffi.gc
 local ffi_string = ffi.string
 local tonumber = tonumber
 local type = type
 local len = string.len
 local open = io.open
 local bit_band = bit.band
+local pcall = pcall
+
+
+local function read_file(fname)
+    if not fname or type(fname) ~= 'string' then
+        return nil, "fname must not be empty"
+    end
+
+    local file, err = open(fname, "rb")
+    if not file then
+        return nil, err
+    end
+
+    local blob, read_err = file:read("*a")
+    local close_ok, close_err = file:close()
+    if not blob then
+        return nil, read_err
+    end
+    if not close_ok then
+        return nil, close_err
+    end
+    return blob
+end
+
+
+local function create_from_file_blob(fname, create_from_str)
+    local blob, err = read_file(fname)
+    if not blob then
+        return nil, err
+    end
+    return create_from_str(blob)
+end
+
+
+local function gd_ptr_to_string(blob, size)
+    if blob == nil then
+        return nil, "encode failed"
+    end
+
+    local ok, str = pcall(ffi_string, blob, size[0])
+    libgd.gdFree(blob)
+    if not ok then
+        return nil, str
+    end
+    return str
+end
+
+
+local function gd_char_ptr_to_string(ptr)
+    if ptr == nil then
+        return nil
+    end
+
+    local ok, str = pcall(ffi_string, ptr)
+    libgd.gdFree(ptr)
+    if not ok then
+        return nil
+    end
+    return str
+end
+
+
+local function get_font(name)
+    local ok, font = pcall(function()
+        return libgd[name]()
+    end)
+    if ok then
+        return font
+    end
+    return nil
+end
+
+
+local function get_image_ptr(value, name)
+    if value and type(value) == 'cdata' then
+        return value
+    end
+    if value and type(value) == 'table' and type(value.im) == 'cdata' then
+        return value.im
+    end
+    return nil, name .. " must be specified as gd image object or cdata<gdImagePtr>"
+end
 
 
 _M.destroy = function(image)
     if image and image.im then
+        local im = image.im
         image.im = nil
-        image = nil
+        if image._owned ~= false then
+            ffi_gc(im, nil)
+            libgd.gdImageDestroy(im)
+        end
         return true
     end
     return false
@@ -59,18 +146,7 @@ end
 
 
 _M.createFromJpeg = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromJpeg(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromJpegStr)
 end
 
 
@@ -88,18 +164,7 @@ end
 
 
 _M.createFromGif = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromGif(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromGifStr)
 end
 
 
@@ -117,18 +182,7 @@ end
 
 
 _M.createFromPng = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromPng(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromPngStr)
 end
 
 
@@ -146,18 +200,7 @@ end
 
 
 _M.createFromGd = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromGd(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromGdStr)
 end
 
 
@@ -175,18 +218,7 @@ end
 
 
 _M.createFromGd2 = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromGd2(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromGd2Str)
 end
 
 
@@ -212,18 +244,11 @@ _M.createFromGd2Part = function(fname, sx, sy, w, h)
         return nil, "w and h must be a number not less than 0"
     end
 
-    local file, err = open(fname, "rb")
-    if not file then
+    local blob, err = read_file(fname)
+    if not blob then
         return nil, err
     end
-    local im = libgd.gdImageCreateFromGd2Part(file, sx, sy, w, h)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return _M.createFromGd2PartStr(blob, sx, sy, w, h)
 end
 
 
@@ -249,14 +274,10 @@ end
 
 
 _M.createFromXbm = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
+    if not fname or type(fname) ~= 'string' then
+        return nil, "fname must not be empty"
     end
-    local im = libgd.gdImageCreateFromXbm(file)
-    if file then
-        file:close()
-    end
+    local im = libgd.gdImageCreateFromFile(util.get_char_ptr(fname))
     if im == nil then
         return nil, "create failed"
     end
@@ -265,7 +286,7 @@ end
 
 
 _M.createFromXpm = function(fname)
-    if not fname then
+    if not fname or type(fname) ~= 'string' then
         return nil, "fname must not be empty"
     end
     local im = libgd.gdImageCreateFromXpm(util.get_char_ptr(fname))
@@ -277,23 +298,12 @@ end
 
 
 _M.createFromWebp = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromWebp(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromWebpStr)
 end
 
 
 _M.createFromFile = function(fname)
-    if not fname then
+    if not fname or type(fname) ~= 'string' then
         return nil, "fname must not be empty"
     end
     local im = libgd.gdImageCreateFromFile(util.get_char_ptr(fname))
@@ -305,18 +315,7 @@ end
 
 
 _M.createFromBmp = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromBmp(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromBmpStr)
 end
 
 
@@ -334,18 +333,7 @@ end
 
 
 _M.createFromTga = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromTga(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromTgaStr)
 end
 
 
@@ -376,18 +364,7 @@ end
 
 
 _M.createFromTiff = function(fname)
-    local file, err = open(fname, "rb")
-    if not file then
-        return nil, err
-    end
-    local im = libgd.gdImageCreateFromTiff(file)
-    if file then
-        file:close()
-    end
-    if im == nil then
-        return nil, "create failed"
-    end
-    return image:new(im)
+    return create_from_file_blob(fname, _M.createFromTiffStr)
 end
 
 
@@ -465,8 +442,13 @@ end
 
 
 _M.copy = function(dst, src, dx, dy, sx, sy, w, h)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -481,14 +463,19 @@ _M.copy = function(dst, src, dx, dy, sx, sy, w, h)
     if not w or not h or w < 0 or h < 0 then
         return false, "w and h must be a number not less than 0"
     end
-    libgd.gdImageCopy(dst, src, dx, dy, sx, sy, w, h)
+    libgd.gdImageCopy(dst_ptr, src_ptr, dx, dy, sx, sy, w, h)
     return true
 end
 
 
 _M.copyResized = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -508,14 +495,19 @@ _M.copyResized = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
         return false, "sw and sh must be a positive number"
     end
 
-    libgd.gdImageCopyResized(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
+    libgd.gdImageCopyResized(dst_ptr, src_ptr, dx, dy, sx, sy, dw, dh, sw, sh)
     return true
 end
 
 
 _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -535,14 +527,19 @@ _M.copyResampled = function(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
         return false, "sw and sh must be a positive number"
     end
 
-    libgd.gdImageCopyResampled(dst, src, dx, dy, sx, sy, dw, dh, sw, sh)
+    libgd.gdImageCopyResampled(dst_ptr, src_ptr, dx, dy, sx, sy, dw, dh, sw, sh)
     return true
 end
 
 
 _M.copyRotated = function(dst, src, dx, dy, sx, sy, sw, sh, angle)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -562,14 +559,19 @@ _M.copyRotated = function(dst, src, dx, dy, sx, sy, sw, sh, angle)
         return false, "angle must be a number"
     end
 
-    libgd.gdImageCopyRotated(dst, src, dx, dy, sx, sy, sw, sh, angle)
+    libgd.gdImageCopyRotated(dst_ptr, src_ptr, dx, dy, sx, sy, sw, sh, angle)
     return true
 end
 
 
 _M.copyMerge = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -589,14 +591,19 @@ _M.copyMerge = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
         return false, "pct must be a number"
     end
 
-    libgd.gdImageCopyMerge(dst, src, dx, dy, sx, sy, sw, sh, pct)
+    libgd.gdImageCopyMerge(dst_ptr, src_ptr, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
 
 
 _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
+    end
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
     end
 
     dx, dy = tonumber(dx), tonumber(dy)
@@ -616,7 +623,7 @@ _M.copyMergeGray = function(dst, src, dx, dy, sx, sy, sw, sh, pct)
         return false, "pct must be a number"
     end
 
-    libgd.gdImageCopyMergeGray(dst, src, dx, dy, sx, sy, sw, sh, pct)
+    libgd.gdImageCopyMergeGray(dst_ptr, src_ptr, dx, dy, sx, sy, sw, sh, pct)
     return true
 end
 
@@ -682,13 +689,26 @@ end
 
 
 _M.interlace = function(im)
-    if not im or type(im) ~= 'cdata' then
-        return false, "im must be specified as cdata<gdImagePtr>"
+    local im_ptr, err = get_image_ptr(im, "im")
+    if not im_ptr then
+        return false, err
     end
 
-    local gd = image:wrap(im)
+    local gd = image:wrap(im_ptr)
     return gd:interlace()
 end
+
+
+_M.setInterlaced = function(im, interlace_arg)
+    local im_ptr, err = get_image_ptr(im, "im")
+    if not im_ptr then
+        return false, err
+    end
+
+    local gd = image:wrap(im_ptr)
+    return gd:setInterlaced(interlace_arg)
+end
+_M.setInterlace = _M.setInterlaced
 
 
 _M.getClip = function(im)
@@ -702,10 +722,15 @@ end
 
 
 _M.paletteCopy = function(dst, src)
-    if not dst or not src or type(dst) ~= 'cdata' or type(src) ~= 'cdata' then
-        return false, "dst src must be specified as cdata<gdImagePtr>"
+    local dst_ptr, err = get_image_ptr(dst, "dst")
+    if not dst_ptr then
+        return false, err
     end
-    libgd.gdImagePaletteCopy(dst, src)
+    local src_ptr, err = get_image_ptr(src, "src")
+    if not src_ptr then
+        return false, err
+    end
+    libgd.gdImagePaletteCopy(dst_ptr, src_ptr)
     return true
 end
 
@@ -754,10 +779,11 @@ _M.stringFT = function(foreground, font, size, ang, x, y, str)
     end
 
     local brect = util.get_int_ptr_list(8)
-    if libgd.gdImageStringFT(nil, brect, foreground, font, size, ang, x, y, str) == nil then
+    local err = libgd.gdImageStringFT(nil, brect, foreground, font, size, ang, x, y, str)
+    if err == nil then
         return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
-    return nil
+    return nil, ffi_string(err)
 end
 
 
@@ -790,23 +816,32 @@ _M.stringFTEx = function(foreground, font, size, ang, x, y, str, extr)
     local ex = util.get_font_type_extract_ptr(extr)
 
     local brect = util.get_int_ptr_list(8)
-    if libgd.gdImageStringFTEx(nil, brect, foreground, font, size, ang, x, y, str, ex) == nil then
-        if bit_band(ex.flags, base.gdFTEX_XSHOW) then
-            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow
-        end
+    local err = libgd.gdImageStringFTEx(nil, brect, foreground, font, size, ang, x, y, str, ex)
+    if err == nil then
+        local has_xshow = bit_band(ex.flags, base.gdFTEX_XSHOW) ~= 0
+        local has_fontpath = bit_band(ex.flags, base.gdFTEX_RETURNFONTPATHNAME) ~= 0
+        local xshow = has_xshow and gd_char_ptr_to_string(ex.xshow) or nil
+        local fontpath = has_fontpath and gd_char_ptr_to_string(ex.fontpath) or nil
 
-        if bit_band(ex.flags, base.gdFTEX_RETURNFONTPATHNAME) then
-            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow, ex.fontpath
+        if has_xshow and has_fontpath then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], xshow, fontpath
+        end
+        if has_xshow then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], xshow
+        end
+        if has_fontpath then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], nil, fontpath
         end
         return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
-    return nil
+    return nil, ffi_string(err)
 end
 
 
 _M.gifAnimEndStr = function()
     local size = util.get_int_ptr_0()
-    return ffi_string(libgd.gdImageGifAnimEndPtr(size), size[0])
+    local blob = libgd.gdImageGifAnimEndPtr(size)
+    return gd_ptr_to_string(blob, size)
 end
 
 
@@ -859,14 +894,14 @@ _M.DISPOSAL_RESTORE_BACKGROUND = base.gdDisposalRestoreBackground
 _M.DISPOSAL_RESTORE_PREVIOUS = base.gdDisposalRestorePrevious
 
 --standard gd fonts
-_M.FONT_TINY = base.MY_GD_FONT_TINY
+_M.FONT_TINY = get_font("gdFontGetTiny")
 
-_M.FONT_SMALL = base.MY_GD_FONT_SMALL
+_M.FONT_SMALL = get_font("gdFontGetSmall")
 
-_M.FONT_MEDIUM = base.MY_GD_FONT_MEDIUM_BOLD
+_M.FONT_MEDIUM = get_font("gdFontGetMediumBold")
 
-_M.FONT_LARGE = base.MY_GD_FONT_LARGE
+_M.FONT_LARGE = get_font("gdFontGetLarge")
 
-_M.FONT_GIANT = base.MY_GD_FONT_GIANT
+_M.FONT_GIANT = get_font("gdFontGetGiant")
 
 return _M

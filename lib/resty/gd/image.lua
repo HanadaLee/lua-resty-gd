@@ -4,7 +4,7 @@
 
 local modulename = "gdImage"
 local _M = { _NAME = modulename }
-local mt = {}
+local mt = { __index = _M }
 
 local ffi = require('ffi')
 local ffi_new = ffi.new
@@ -16,14 +16,111 @@ local util = require('resty.gd.util')
 local ffi_gc = ffi.gc
 local ffi_string = ffi.string
 local bit_band = bit.band
+local bit_rshift = bit.rshift
 
 local setmetatable = setmetatable
 local tonumber = tonumber
-local tostring = tostring
 local type = type
 local open = io.open
 local byte = string.byte
-local char = string.char
+local pcall = pcall
+
+
+local function gd_ptr_to_string(blob, size)
+    if blob == nil then
+        return nil, "encode failed"
+    end
+
+    local ok, str = pcall(ffi_string, blob, size[0])
+    libgd.gdFree(blob)
+    if not ok then
+        return nil, str
+    end
+    return str
+end
+
+
+local function gd_char_ptr_to_string(ptr)
+    if ptr == nil then
+        return nil
+    end
+
+    local ok, str = pcall(ffi_string, ptr)
+    libgd.gdFree(ptr)
+    if not ok then
+        return nil
+    end
+    return str
+end
+
+
+local function write_file(fname, data, mode)
+    local f, err = open(fname, mode or 'wb')
+    if not f then
+        return false, err
+    end
+
+    local ok, write_err = f:write(data)
+    local close_ok, close_err = f:close()
+    if not ok then
+        return false, write_err
+    end
+    if not close_ok then
+        return false, close_err
+    end
+    return true
+end
+
+
+local function color_from_truecolor(color, shift, mask)
+    return tonumber(bit_band(bit_rshift(color, shift), mask))
+end
+
+
+local function palette_color(self, color, channel)
+    local colors_total = tonumber(self.im.colorsTotal)
+    if color >= colors_total then
+        return nil, "color out of palette range"
+    end
+    if channel == "red" then
+        return tonumber(self.im.red[color])
+    end
+    if channel == "green" then
+        return tonumber(self.im.green[color])
+    end
+    if channel == "blue" then
+        return tonumber(self.im.blue[color])
+    end
+    return tonumber(self.im.alpha[color])
+end
+
+
+local function color_component(self, color, channel, shift, mask)
+    color = tonumber(color)
+    if not color or color < 0 then
+        return nil, "color must be a number not less than 0"
+    end
+
+    if tonumber(self.im.trueColor) ~= base.GD_ZERO then
+        return color_from_truecolor(color, shift, mask)
+    end
+
+    return palette_color(self, color, channel)
+end
+
+
+local function gd_bool(value)
+    if value == nil or value == false then
+        return 0
+    end
+
+    local n = tonumber(value)
+    if n then
+        return n ~= 0 and 1 or 0
+    end
+
+    return 1
+end
 
 
 _M.new = function(self, image)
@@ -31,8 +128,10 @@ _M.new = function(self, image)
         return nil, "create failed"
     end
 
-    self.im = ffi_gc(image, libgd.gdImageDestroy)
-    return setmetatable(self, mt)
+    return setmetatable({
+        im = ffi_gc(image, libgd.gdImageDestroy),
+        _owned = true,
+    }, mt)
 end
 
 
@@ -41,8 +140,10 @@ _M.wrap = function(self, image)
         return nil, "wrap failed"
     end
 
-    self.im = image
-    return setmetatable(self, mt)
+    return setmetatable({
+        im = image,
+        _owned = false,
+    }, mt)
 end
 
 
@@ -138,16 +239,12 @@ _M.jpeg = function(self, fname, quality)
     if not quality or quality < 0 or quality > 100 then
         return false, "quality must be a number between 0 and 100"
     end
-    local f, err = open(fname, 'wb')
-    if not f then
+
+    local data, err = self:jpegStr(quality)
+    if not data then
         return false, err
     end
-
-    libgd.gdImageJpeg(self.im, f, quality)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
@@ -159,28 +256,23 @@ _M.jpegStr = function(self, quality)
 
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageJpegPtr(self.im, size, quality)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.png = function(self, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:pngStr()
+    if not data then
         return false, err
     end
-
-    libgd.gdImagePng(self.im, f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.pngStr = function(self)
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImagePngPtr(self.im, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
@@ -189,16 +281,12 @@ _M.pngEx = function(self, fname, compression_level)
     if not level or level < 0 or level > 9 then
         return false, "level must be a number between 0 and 9"
     end
-    local f, err = open(fname, 'wb')
-    if not f then
+
+    local data, err = self:pngStrEx(level)
+    if not data then
         return false, err
     end
-
-    libgd.gdImagePngEx(self.im, f, level)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
@@ -210,49 +298,39 @@ _M.pngStrEx = function(self, compression_level)
 
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImagePngPtrEx(self.im, size, level)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.gif = function(self, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:gifStr()
+    if not data then
         return false, err
     end
-
-    libgd.gdImageGif(self.im, f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.gifStr = function(self)
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageGifPtr(self.im, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.gd = function(self, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:gdStr()
+    if not data then
         return false, err
     end
-
-    libgd.gdImageGd(self.im, f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.gdStr = function(self)
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageGdPtr(self.im, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
@@ -266,16 +344,12 @@ _M.gd2 = function(self, fname, chunk_size, format)
     if not format or (format ~= base.GD2_FMT_RAW and format ~= base.GD2_FMT_COMPRESSED) then
         return false, "format must be gd.GD2_FMT_RAW or gd.GD2_FMT_COMPRESSED"
     end
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:gd2Str(chunk_size, format)
+    if not data then
         return false, err
     end
 
-    libgd.gdImageGd2(self.im, f, chunk_size, format)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
@@ -292,26 +366,21 @@ _M.gd2Str = function(self, chunk_size, format)
 
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageGd2Ptr(self.im, chunk_size, format, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.wbmp = function(self, foreground, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
-        return false, err
-    end
-
     foreground = tonumber(foreground)
     if not foreground then
         return false, "foreground must be a number"
     end
 
-    libgd.gdImageWBMP(self.im, foreground, f)
-    if f then
-        f:close()
+    local data, err = self:wbmpStr(foreground)
+    if not data then
+        return false, err
     end
-    return true
+    return write_file(fname, data)
 end
 
 
@@ -323,47 +392,37 @@ _M.wbmpStr = function(self, foreground)
 
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageWBMPPtr(self.im, size, foreground)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.webp = function(self, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:webpStr()
+    if not data then
         return false, err
     end
-
-    libgd.gdImageWebp(self.im, f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.webpStr = function(self)
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageWebpPtr(self.im, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.webpEx = function(self, quantization, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
-        return false, err
-    end
-
     quantization = tonumber(quantization)
     if not quantization then
         return false, "quantization must be a number"
     end
 
-    libgd.gdImageWebpEx(self.im, f, quantization)
-    if f then
-        f:close()
+    local data, err = self:webpExStr(quantization)
+    if not data then
+        return false, err
     end
-    return true
+    return write_file(fname, data)
 end
 
 
@@ -375,41 +434,36 @@ _M.webpExStr = function(self, quantization)
 
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageWebpPtrEx(self.im, size, quantization)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.tiff = function(self, fname)
-    local f, err = open(fname, 'wb')
-    if not f then
+    local data, err = self:tiffStr()
+    if not data then
         return false, err
     end
-
-    libgd.gdImageTiff(self.im, f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.tiffStr = function(self)
     local size = ffi_new("int[1]", 0)
     local blob = libgd.gdImageTiffPtr(self.im, size)
-    return ffi_string(blob, size[0])
+    return gd_ptr_to_string(blob, size)
 end
 
 
-_M.colorAllocate = function(self, red, green, black)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+_M.colorAllocate = function(self, red, green, blue)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorAllocate(self.im, red, green, black)
+    local ret = libgd.gdImageColorAllocate(self.im, red, green, blue)
     if ret >= base.GD_OK then
         return ret
     else
@@ -418,20 +472,20 @@ _M.colorAllocate = function(self, red, green, black)
 end
 
 
-_M.colorAllocateAlpha = function(self, red, green, black, alpha)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
+_M.colorAllocateAlpha = function(self, red, green, blue, alpha)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
     alpha = tonumber(alpha)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
     if not alpha or alpha < 0 then
         return nil, "alpha must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorAllocateAlpha(self.im, red, green, black, alpha)
+    local ret = libgd.gdImageColorAllocateAlpha(self.im, red, green, blue, alpha)
     if ret >= base.GD_OK then
         return ret
     else
@@ -440,16 +494,16 @@ _M.colorAllocateAlpha = function(self, red, green, black, alpha)
 end
 
 
-_M.colorClosest = function(self, red, green, black)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+_M.colorClosest = function(self, red, green, blue)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorClosest(self.im, red, green, black)
+    local ret = libgd.gdImageColorClosest(self.im, red, green, blue)
     if ret >= base.GD_OK then
         return ret
     else
@@ -458,20 +512,20 @@ _M.colorClosest = function(self, red, green, black)
 end
 
 
-_M.colorClosestAlpha = function(self, red, green, black, alpha)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
+_M.colorClosestAlpha = function(self, red, green, blue, alpha)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
     alpha = tonumber(alpha)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
     if not alpha or alpha < 0 then
         return nil, "alpha must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorClosestAlpha(self.im, red, green, black, alpha)
+    local ret = libgd.gdImageColorClosestAlpha(self.im, red, green, blue, alpha)
     if ret >= base.GD_OK then
         return ret
     else
@@ -480,16 +534,16 @@ _M.colorClosestAlpha = function(self, red, green, black, alpha)
 end
 
 
-_M.colorClosestHWB = function(self, red, green, black)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+_M.colorClosestHWB = function(self, red, green, blue)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorClosestHWB(self.im, red, green, black)
+    local ret = libgd.gdImageColorClosestHWB(self.im, red, green, blue)
     if ret >= base.GD_OK then
         return ret
     else
@@ -498,16 +552,16 @@ _M.colorClosestHWB = function(self, red, green, black)
 end
 
 
-_M.colorExact = function(self, red, green, black)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+_M.colorExact = function(self, red, green, blue)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorExact(self.im, red, green, black)
+    local ret = libgd.gdImageColorExact(self.im, red, green, blue)
     if ret >= base.GD_OK then
         return ret
     else
@@ -516,20 +570,20 @@ _M.colorExact = function(self, red, green, black)
 end
 
 
-_M.colorExactAlpha = function(self, red, green, black, alpha)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
+_M.colorExactAlpha = function(self, red, green, blue, alpha)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
     alpha = tonumber(alpha)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
     if not alpha or alpha < 0 then
         return nil, "alpha must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorExactAlpha(self.im, red, green, black, alpha)
+    local ret = libgd.gdImageColorExactAlpha(self.im, red, green, blue, alpha)
     if ret >= base.GD_OK then
         return ret
     else
@@ -538,16 +592,16 @@ _M.colorExactAlpha = function(self, red, green, black, alpha)
 end
 
 
-_M.colorResolve = function(self, red, green, black)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+_M.colorResolve = function(self, red, green, blue)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorResolve(self.im, red, green, black)
+    local ret = libgd.gdImageColorResolve(self.im, red, green, blue)
     if ret >= base.GD_OK then
         return ret
     else
@@ -556,20 +610,20 @@ _M.colorResolve = function(self, red, green, black)
 end
 
 
-_M.colorResolveAlpha = function(self, red, green, black, alpha)
-    red, green, black = tonumber(red), tonumber(green), tonumber(black)
+_M.colorResolveAlpha = function(self, red, green, blue, alpha)
+    red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
     alpha = tonumber(alpha)
-    if not red or not green or not black then
-        return nil, "red green black must be a number"
+    if not red or not green or not blue then
+        return nil, "red green blue must be a number"
     end
-    if red < 0 or green < 0 or black < 0 then
-        return nil, "red green black must be a number not less than 0"
+    if red < 0 or green < 0 or blue < 0 then
+        return nil, "red green blue must be a number not less than 0"
     end
     if not alpha or alpha < 0 then
         return nil, "alpha must be a number not less than 0"
     end
 
-    local ret = libgd.gdImageColorResolveAlpha(self.im, red, green, black, alpha)
+    local ret = libgd.gdImageColorResolveAlpha(self.im, red, green, blue, alpha)
     if ret >= base.GD_OK then
         return ret
     else
@@ -584,47 +638,27 @@ end
 
 
 _M.red = function(self, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return nil, "color must be a number not less than 0"
-    end
-
-    return libgd.gdImageRed(self.im, color)
+    return color_component(self, color, "red", 16, 0xff)
 end
 
 
 _M.blue = function(self, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return nil, "color must be a number not less than 0"
-    end
-
-    return libgd.gdImageBlue(self.im, color)
+    return color_component(self, color, "blue", 0, 0xff)
 end
 
 
 _M.green = function(self, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return nil, "color must be a number not less than 0"
-    end
-
-    return libgd.gdImageGreen(self.im, color)
+    return color_component(self, color, "green", 8, 0xff)
 end
 
 
 _M.alpha = function(self, color)
-    color = tonumber(color)
-    if not color or color < 0 then
-        return nil, "color must be a number not less than 0"
-    end
-
-    return libgd.gdImageAlpha(self.im, color)
+    return color_component(self, color, "alpha", 24, 0x7f)
 end
 
 
 _M.getTransparent = function(self)
-    local ret = libgd.gdImageGetTransparent(self.im)
+    local ret = tonumber(self.im.transparent)
     if ret ~= base.GD_ERR then
         return ret
     else
@@ -1038,23 +1072,22 @@ end
 
 
 _M.saveAlpha = function(self, save_or_not)
-    local save = 0
-    if save_or_not then
-        save = 1
-    end
+    local save = gd_bool(save_or_not)
     libgd.gdImageSaveAlpha(self.im, save)
 end
 
 
 _M.interlace = function(self)
-    local ret = libgd.gdImageGetInterlaced(self.im)
-    if ret ~= base.GD_OK then
-        return ret
-    else
-        return nil
-    end
+    return tonumber(self.im.interlace)
 end
 _M.getInterlaced = _M.interlace
+
+
+_M.setInterlaced = function(self, interlace_arg)
+    libgd.gdImageInterlace(self.im, gd_bool(interlace_arg))
+    return true
+end
+_M.setInterlace = _M.setInterlaced
 
 
 _M.string = function(self, font, x, y, s, color)
@@ -1073,7 +1106,7 @@ _M.string = function(self, font, x, y, s, color)
         return false, "s must be a string"
     end
 
-    libgd.gdImageString(self.im, font, x, y, util.get_char_ptr(s), color)
+    libgd.gdImageString(self.im, font, x, y, util.get_uchar_ptr(s), color)
     return true
 end
 
@@ -1094,7 +1127,7 @@ _M.stringUp = function(self, font, x, y, s, color)
         return false, "s must be a string"
     end
 
-    libgd.gdImageStringUp(self.im, font, x, y, util.get_char_ptr(s), color)
+    libgd.gdImageStringUp(self.im, font, x, y, util.get_uchar_ptr(s), color)
     return true
 end
 
@@ -1232,10 +1265,11 @@ _M.stringFT = function(self, foreground, font, size, ang, x, y, str)
     end
 
     local brect = util.get_int_ptr_list(8)
-    if libgd.gdImageStringFT(self.im, brect, foreground, font, size, ang, x, y, str) == nil then
+    local err = libgd.gdImageStringFT(self.im, brect, foreground, font, size, ang, x, y, str)
+    if err == nil then
         return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
-    return nil
+    return nil, ffi_string(err)
 end
 
 
@@ -1368,17 +1402,25 @@ _M.stringFTEx = function(self, foreground, font, size, ang, x, y, str, extr)
     local ex = util.get_font_type_extract_ptr(extr)
 
     local brect = util.get_int_ptr_list(8)
-    if libgd.gdImageStringFTEx(self.im, brect, foreground, font, size, ang, x, y, str, ex) == nil then
-        if bit_band(ex.flags, base.gdFTEX_XSHOW) then
-            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow
-        end
+    local err = libgd.gdImageStringFTEx(self.im, brect, foreground, font, size, ang, x, y, str, ex)
+    if err == nil then
+        local has_xshow = bit_band(ex.flags, base.gdFTEX_XSHOW) ~= 0
+        local has_fontpath = bit_band(ex.flags, base.gdFTEX_RETURNFONTPATHNAME) ~= 0
+        local xshow = has_xshow and gd_char_ptr_to_string(ex.xshow) or nil
+        local fontpath = has_fontpath and gd_char_ptr_to_string(ex.fontpath) or nil
 
-        if bit_band(ex.flags, base.gdFTEX_RETURNFONTPATHNAME) then
-            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], ex.xshow, ex.fontpath
+        if has_xshow and has_fontpath then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], xshow, fontpath
+        end
+        if has_xshow then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], xshow
+        end
+        if has_fontpath then
+            return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7], nil, fontpath
         end
         return brect[0], brect[1], brect[2], brect[3], brect[4], brect[5], brect[6], brect[7]
     end
-    return nil
+    return nil, ffi_string(err)
 end
 
 
@@ -1413,45 +1455,30 @@ fillPortion, fontname, points, top, bottom, color)
     if not color or color < 0 then
         return false, "color must be a number not less than 0"
     end
-    if libgd.gdImageStringFTCircle(self.im, x, y, radius, textRadius,
-        fillPortion, fontname, points, top, bottom, color) == nil then
+    local err = libgd.gdImageStringFTCircle(self.im, x, y, radius, textRadius,
+        fillPortion, fontname, points, top, bottom, color)
+    if err == nil then
         return true
     end
-    return false
+    return false, ffi_string(err)
 end
 
 
 _M.gifAnimBegin = function(self, fname, globalCM, loops)
-    local f, err = open(fname, 'wb')
-    if not f then
-        return false, err
-    end
-    local global = 0
-    if globalCM then
-        global = 1
-    end
     loops = tonumber(loops)
     if not loops then
         return false, "loops must be a number"
     end
-    libgd.gdImageGifAnimBegin(self.im, f, global, loops)
-    if f then
-        f:close()
+    local data, err = self:gifAnimBeginStr(globalCM, loops)
+    if not data then
+        return false, err
     end
-    return true
+    return write_file(fname, data)
 end
 
 
 _M.gifAnimAdd = function(self, fname, localCM, leftOfs, topOfs, delay,
 disposal, previm)
-    local f, err = open(fname, 'ab')
-    if not f then
-        return false, err
-    end
-    local localcm = 0
-    if localCM then
-        localcm = 1
-    end
     leftOfs, topOfs = tonumber(leftOfs), tonumber(topOfs)
     if not leftOfs or not topOfs then
         return false, "leftOfs topOfs must be a number"
@@ -1465,48 +1492,46 @@ disposal, previm)
         return false, "disposal must be a number"
     end
 
-    libgd.gdImageGifAnimAdd(self.im, f, localcm, leftOfs, topOfs, delay,
+    local data, err = self:gifAnimAddStr(localCM, leftOfs, topOfs, delay,
         disposal, previm)
-    if f then
-        f:close()
+    if not data then
+        return false, err
     end
-    return true
+    return write_file(fname, data, 'ab')
 end
 
 
 _M.gifAnimEnd = function(self, fname)
-    local f, err = open(fname, 'ab')
-    if not f then
+    local data, err = _M.gifAnimEndStr()
+    if not data then
         return false, err
     end
-    libgd.gdImageGifAnimEnd(f)
-    if f then
-        f:close()
-    end
-    return true
+    return write_file(fname, data, 'ab')
+end
+
+
+_M.gifAnimEndStr = function()
+    local size = util.get_int_ptr_0()
+    local blob = libgd.gdImageGifAnimEndPtr(size)
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.gifAnimBeginStr = function(self, globalCM, loops)
-    local global = 0
-    if globalCM then
-        global = 1
-    end
+    local global = gd_bool(globalCM)
     loops = tonumber(loops)
     if not loops then
         return nil, "loops must be a number"
     end
     local size = util.get_int_ptr_0()
-    return ffi_string(libgd.gdImageGifAnimBeginPtr(self.im, size, global, loops), size[0])
+    local blob = libgd.gdImageGifAnimBeginPtr(self.im, size, global, loops)
+    return gd_ptr_to_string(blob, size)
 end
 
 
 _M.gifAnimAddStr = function(self, localCM, leftOfs, topOfs, delay,
 disposal, previm)
-    local localcm = 0
-    if localCM then
-        localcm = 1
-    end
+    local localcm = gd_bool(localCM)
     leftOfs, topOfs = tonumber(leftOfs), tonumber(topOfs)
     if not leftOfs or not topOfs then
         return false, "leftOfs topOfs must be a number"
@@ -1520,8 +1545,9 @@ disposal, previm)
         return false, "disposal must be a number"
     end
     local size = util.get_int_ptr_0()
-    return ffi_string(libgd.gdImageGifAnimAddPtr(self.im, size, localcm, leftOfs, topOfs, delay,
-        disposal, previm), size[0])
+    local blob = libgd.gdImageGifAnimAddPtr(self.im, size, localcm, leftOfs, topOfs, delay,
+        disposal, previm)
+    return gd_ptr_to_string(blob, size)
 end
 
 

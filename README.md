@@ -58,7 +58,7 @@ So, the 2.2.5.1 version is the first binding version for libgd 2.2.5 and 2.2.5.2
 
 But they use the same libgd version.
 
-The current version 2.3.3.2 is the first binding version for libgd 2.3.3. It is not compatible with previous versions.
+The current version 2.3.3.3 is the first binding version for libgd 2.3.3. It is not compatible with previous versions.
 
 [Back to TOC](#table-of-contents)
 

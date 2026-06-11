@@ -82,7 +82,7 @@ ffi.cdef([[
 	/* define struct with name and func ptr and add it to gdImageStruct gdInterpolationMethod interpolation; */
 
 	/* Interpolation function ptr */
-	typedef double (* interpolation_method )(double);
+	typedef double (* interpolation_method )(double, double);
 
 	typedef struct gdImageStruct {
 		/* Palette-based image pixels */
@@ -414,18 +414,7 @@ ffi.cdef([[
 
 	void gdImageColorDeallocate(gdImagePtr im, int color);
 
-	int gdImageColorsTotal(gdImagePtr im);
-	int gdImageRed(gdImagePtr im, int c);
-	int gdImageGreen(gdImagePtr im, int c);
-	int gdImageBlue(gdImagePtr im, int c);
-	int gdImageAlpha(gdImagePtr im, int color);
-
-	int gdImageGetInterlaced(gdImagePtr im);
-	int gdImageGetTransparent(gdImagePtr im);
 	void gdImageColorTransparent(gdImagePtr im, int c);
-
-	int gdImageSX(gdImagePtr im);
-	int gdImageSY(gdImagePtr im);
 
 	int gdImageBoundsSafe(gdImagePtr im, int x, int y);
 	int gdImageGetPixel(gdImagePtr im, int x, int y);
@@ -512,6 +501,11 @@ ffi.cdef([[
 	int gdFontCacheSetup(void);
 	void gdFontCacheShutdown(void);
 	void gdFreeFontCache(void);
+	gdFontPtr gdFontGetTiny(void);
+	gdFontPtr gdFontGetSmall(void);
+	gdFontPtr gdFontGetMediumBold(void);
+	gdFontPtr gdFontGetLarge(void);
+	gdFontPtr gdFontGetGiant(void);
 
 	char *gdImageStringFT(gdImage *im, int *brect, int fg, const char *fontlist,
 	                                     double ptsize, double angle, int x, int y,

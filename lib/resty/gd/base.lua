@@ -3,7 +3,7 @@
 
 
 local modulename = "gdBase"
-local _M = { _VERSION = '2.3.3.2', _NAME = modulename }
+local _M = { _VERSION = '2.3.3.3', _NAME = modulename }
 
 local ffi = require('ffi')
 local libgd = require('resty.gd.libgd')

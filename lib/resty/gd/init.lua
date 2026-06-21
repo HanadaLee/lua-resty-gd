@@ -58,6 +58,11 @@ local function gd_ptr_to_string(blob, size)
         return nil, "encode failed"
     end
 
+    if size[0] <= 0 then
+        libgd.gdFree(blob)
+        return nil, "encode failed: empty output"
+    end
+
     local ok, str = pcall(ffi_string, blob, size[0])
     libgd.gdFree(blob)
     if not ok then

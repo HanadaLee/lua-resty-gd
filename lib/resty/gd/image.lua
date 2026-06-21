@@ -31,6 +31,11 @@ local function gd_ptr_to_string(blob, size)
         return nil, "encode failed"
     end
 
+    if size[0] <= 0 then
+        libgd.gdFree(blob)
+        return nil, "encode failed: empty output"
+    end
+
     local ok, str = pcall(ffi_string, blob, size[0])
     libgd.gdFree(blob)
     if not ok then
@@ -464,7 +469,7 @@ _M.colorAllocate = function(self, red, green, blue)
     end
 
     local ret = libgd.gdImageColorAllocate(self.im, red, green, blue)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -486,7 +491,7 @@ _M.colorAllocateAlpha = function(self, red, green, blue, alpha)
     end
 
     local ret = libgd.gdImageColorAllocateAlpha(self.im, red, green, blue, alpha)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -504,7 +509,7 @@ _M.colorClosest = function(self, red, green, blue)
     end
 
     local ret = libgd.gdImageColorClosest(self.im, red, green, blue)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -526,7 +531,7 @@ _M.colorClosestAlpha = function(self, red, green, blue, alpha)
     end
 
     local ret = libgd.gdImageColorClosestAlpha(self.im, red, green, blue, alpha)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -544,7 +549,7 @@ _M.colorClosestHWB = function(self, red, green, blue)
     end
 
     local ret = libgd.gdImageColorClosestHWB(self.im, red, green, blue)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -562,7 +567,7 @@ _M.colorExact = function(self, red, green, blue)
     end
 
     local ret = libgd.gdImageColorExact(self.im, red, green, blue)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -584,7 +589,7 @@ _M.colorExactAlpha = function(self, red, green, blue, alpha)
     end
 
     local ret = libgd.gdImageColorExactAlpha(self.im, red, green, blue, alpha)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -602,7 +607,7 @@ _M.colorResolve = function(self, red, green, blue)
     end
 
     local ret = libgd.gdImageColorResolve(self.im, red, green, blue)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil
@@ -624,7 +629,7 @@ _M.colorResolveAlpha = function(self, red, green, blue, alpha)
     end
 
     local ret = libgd.gdImageColorResolveAlpha(self.im, red, green, blue, alpha)
-    if ret >= base.GD_OK then
+    if ret >= base.GD_ZERO then
         return ret
     else
         return nil

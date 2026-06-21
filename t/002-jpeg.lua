@@ -29,6 +29,18 @@ describe("jpeg", function()
         assert.is_false(ok)
     end)
 
+    it("outputJpegStr", function()
+        local gdImage, err = gd.createTrueColor(16, 16)
+        assert.is_nil(err)
+
+        local blob
+        blob, err = gdImage:jpegStr(70)
+        assert.is_nil(err)
+        assert.is_true(#blob > 4)
+        assert.are_equal("\255\216", blob:sub(1, 2))
+        assert.are_equal("\255\217", blob:sub(-2))
+    end)
+
     it("sizeXY", function()
         local gdImage, err = gd.createFromJpeg(image_dir .. "/t.jpg")
         assert.is_true(gdImage ~= nil)

@@ -34,6 +34,9 @@ describe("create", function()
         assert.is_true(gdImage ~= nil and type(gdImage) == 'table')
         assert.is_true(gdImage.im ~= nil and type(gdImage.im) == 'cdata')
 
+        local black = gdImage:colorAllocate(0, 0, 0)
+        assert.are_equal(0, black)
+
         local gdImage, err = gd.createTrueColor(-1, 1)
         assert.is_true(gdImage == nil)
 

@@ -1,9 +1,9 @@
 package = "lua-resty-gd"
-version = "2.3.3.3-1"
+version = "2.3.3.4-1"
 
 source = {
     url = "git://github.com/HanadaLee/lua-resty-gd.git",
-    branch = "2.3.3.3",
+    tag = "2.3.3.4",
 }
 
 description = {

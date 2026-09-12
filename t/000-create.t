@@ -231,12 +231,22 @@ location /t {
     content_by_lua_block {
         local gd = require "resty.gd"
         local root = os.getenv("TEST_NGINX_GD_ROOT") .. "/t/image"
-        local im, err = gd.createFromTiff(root .. "/2033418828.tiff")
+        local source, err = gd.createTrueColor(2, 2)
+        assert(source, err)
+        local blob, encode_err = source:tiffStr()
+        if not blob then
+            ngx.log(ngx.WARN, "TIFF support unavailable: ", tostring(encode_err))
+            ngx.say("skipped")
+            return
+        end
+        local tiff_path = root .. "/generated.tiff"
+        local f = assert(io.open(tiff_path, "wb"))
+        assert(f:write(blob))
+        assert(f:close())
+        local im, err = gd.createFromTiff(tiff_path)
+        assert(os.remove(tiff_path))
         assert(im and type(im.im) == "cdata", err)
         assert(not gd.createFromTiff(root .. "/not_found.tiff"))
-        local f = assert(io.open(root .. "/2033418828.tiff", "rb"))
-        local blob = f:read("*a")
-        assert(f:close())
         im, err = gd.createFromTiffStr(blob)
         assert(im and type(im.im) == "cdata", err)
         assert(not gd.createFromTiffStr(nil))

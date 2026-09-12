@@ -12,6 +12,7 @@ Table of Contents
   - [gd](#gd)
 - [Version](#version)
 - [Installation](#installation)
+- [Testing](#testing)
 - [Authors](#authors)
 - [Copyright and License](#copyright-and-license)
 
@@ -70,6 +71,21 @@ You can install it with [LuaRocks](https://luarocks.org):
 ```bash
 luarocks install lua-resty-gd
 ```
+
+Testing
+-------
+
+The test suite uses OpenResty's Test::Nginx framework. With an OpenResty
+build that includes `ngx_http_lua_module` and a system `libgd` installation,
+run it with:
+
+```bash
+TEST_NGINX_BINARY=/path/to/openresty/nginx prove -I /path/to/test-nginx/lib t
+```
+
+Pushing a numeric version tag such as `2.3.3.3` creates a GitHub Release and
+publishes the rock to LuaRocks. Configure the repository secret
+`LUAROCKS_API_KEY` before tagging.
 
 [Back to TOC](#table-of-contents)
 

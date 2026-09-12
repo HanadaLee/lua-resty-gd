@@ -6,6 +6,9 @@ luac.out
 *.zip
 *.tar.gz
 
+# Test::Nginx generated runtime files
+t/servroot/
+
 # Object files
 *.o
 *.os

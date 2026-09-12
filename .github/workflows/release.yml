@@ -1,0 +1,74 @@
+name: Release to LuaRocks
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish to LuaRocks
+    runs-on: ubuntu-latest
+    env:
+      LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install LuaRocks and upload dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            lua5.1 lua-dkjson lua-filesystem lua-sec lua-socket luarocks
+          lua5.1 -e 'assert(require("dkjson"))'
+          luarocks --version
+
+      - name: Validate release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t rockspecs < <(find . -maxdepth 1 -type f -name 'lua-resty-gd-*.rockspec' -print)
+          test "${#rockspecs[@]}" -eq 1 || {
+            echo 'expected exactly one lua-resty-gd rockspec' >&2
+            exit 1
+          }
+          rockspec="${rockspecs[0]}"
+          release_tag="$GITHUB_REF_NAME"
+          grep -Fq "tag = \"$release_tag\"" "$rockspec" || {
+            echo "rockspec tag does not match $release_tag" >&2
+            exit 1
+          }
+          {
+            echo "ROCKSPEC=$rockspec"
+            echo "RELEASE_TAG=$release_tag"
+          } >> "$GITHUB_ENV"
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ROCKSPEC" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ROCKSPEC" \
+              --title "$RELEASE_TAG" \
+              --generate-notes
+          fi
+
+      - name: Upload to LuaRocks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${LUAROCKS_API_KEY:-}" || {
+            echo 'LUAROCKS_API_KEY is not configured' >&2
+            exit 1
+          }
+          luarocks upload --api-key="$LUAROCKS_API_KEY" "$ROCKSPEC"

@@ -22,7 +22,10 @@ jobs:
           set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ca-certificates cpanminus git gnupg libgd-dev lsb-release wget
+            autoconf automake build-essential ca-certificates cpanminus \
+            git gnupg libfontconfig1-dev libfreetype6-dev libjpeg-dev \
+            libpng-dev libtiff-dev libtool libwebp-dev lsb-release \
+            pkg-config wget
 
       - name: Install OpenResty
         shell: bash
@@ -34,6 +37,26 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/openresty.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends openresty
+
+      - name: Build libgd with the TIFF compatibility fix
+        shell: bash
+        run: |
+          set -euxo pipefail
+          src="$RUNNER_TEMP/libgd-src"
+          prefix="$RUNNER_TEMP/libgd"
+          mkdir -p "$src"
+          wget -O "$RUNNER_TEMP/libgd.tar.gz" \
+            https://github.com/libgd/libgd/archive/e66ea2b46bbfe02a8720e1093485d81c07be82a6.tar.gz
+          tar -xzf "$RUNNER_TEMP/libgd.tar.gz" --strip-components=1 -C "$src"
+          (
+            cd "$src"
+            ./bootstrap.sh
+            ./configure --prefix="$prefix" --with-tiff --with-png \
+              --with-jpeg --with-webp --without-avif --without-heif
+            make -j"$(nproc)"
+            make install
+          )
+          echo "LD_LIBRARY_PATH=$prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
       - name: Install Test::Nginx
         shell: bash

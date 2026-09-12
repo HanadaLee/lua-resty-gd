@@ -234,30 +234,16 @@ location /t {
         local source, err = gd.createTrueColor(2, 2)
         assert(source, err)
         local blob, encode_err = source:tiffStr()
-        if not blob then
-            ngx.log(ngx.WARN, "TIFF support unavailable: ", tostring(encode_err))
-            ngx.say("skipped")
-            return
-        end
+        assert(blob, encode_err)
         local tiff_path = root .. "/generated.tiff"
         local f = assert(io.open(tiff_path, "wb"))
         assert(f:write(blob))
         assert(f:close())
         local im, err = gd.createFromTiff(tiff_path)
-        os.remove(tiff_path)
-        if not im then
-            ngx.log(ngx.WARN, "TIFF decode unavailable: ", tostring(err))
-            ngx.say("skipped")
-            return
-        end
+        assert(os.remove(tiff_path))
         assert(im and type(im.im) == "cdata", err)
         assert(not gd.createFromTiff(root .. "/not_found.tiff"))
         im, err = gd.createFromTiffStr(blob)
-        if not im then
-            ngx.log(ngx.WARN, "TIFF string decode unavailable: ", tostring(err))
-            ngx.say("skipped")
-            return
-        end
         assert(im and type(im.im) == "cdata", err)
         assert(not gd.createFromTiffStr(nil))
         assert(not gd.createFromTiffStr(""))
